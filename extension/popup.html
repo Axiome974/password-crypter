@@ -2,20 +2,9 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
   <title>Password Crypter</title>
-  <meta name="description" content="Chiffre des notes et génère des mots de passe déterministes localement dans le navigateur, à partir d'un seul Master Secret jamais stocké.">
   <link rel="stylesheet" href="asset/style/style.css">
-
-  <link rel="manifest" href="manifest.webmanifest">
-  <meta name="theme-color" content="#7c5cff">
-  <link rel="icon" type="image/svg+xml" href="asset/icons/icon.svg">
-  <link rel="icon" type="image/png" sizes="192x192" href="asset/icons/icon-192.png">
-  <link rel="icon" type="image/png" sizes="512x512" href="asset/icons/icon-512.png">
-  <link rel="apple-touch-icon" href="asset/icons/apple-touch-icon.png">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Password Crypter">
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <main class="card">
@@ -25,17 +14,10 @@
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
     </div>
-    <p class="subtitle">
-      Un seul secret à mémoriser. Chiffre des notes ou recalcule un mot de
-      passe — tout se passe dans ton navigateur, ton Master Secret n'est
-      jamais envoyé ni enregistré.
-    </p>
+    <p class="subtitle">Renseigne ton Master Secret pour retrouver ou créer tes mots de passe.</p>
 
     <div class="field">
-      <div class="label-row">
-        <label for="master-secret">Master Secret</label>
-        <button type="button" class="help-toggle" aria-expanded="false" aria-controls="master-secret-help" aria-label="Aide">?</button>
-      </div>
+      <label for="master-secret">Master Secret</label>
       <div class="input-wrap">
         <input type="password" id="master-secret" placeholder="Ton secret racine" autocomplete="off" spellcheck="false">
         <button type="button" class="icon-btn eye-toggle" id="toggle-master-secret" aria-label="Afficher le Master Secret">
@@ -43,19 +25,18 @@
           <svg class="icon icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.6 20.6 0 0 1 5.06-5.94M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 8 11 8a20.6 20.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
         </button>
       </div>
-      <p class="field-note" id="master-secret-help">Jamais stocké, jamais envoyé — seulement gardé en mémoire le temps de la page.</p>
+      <p class="list-hint">Jamais stocké, jamais envoyé — seulement gardé en mémoire tant que ce popup reste ouvert.</p>
     </div>
 
     <div class="tabs" role="tablist" aria-label="Fonctions">
       <button type="button" class="tab active" role="tab" id="tab-btn-saved" aria-controls="panel-saved" aria-selected="true" data-tab="saved">Enregistrés</button>
       <button type="button" class="tab" role="tab" id="tab-btn-generator" aria-controls="panel-generator" aria-selected="false" tabindex="-1" data-tab="generator">Générateur</button>
-      <button type="button" class="tab" role="tab" id="tab-btn-secret" aria-controls="panel-secret" aria-selected="false" tabindex="-1" data-tab="secret">Secret</button>
     </div>
 
     <!-- Enregistrés -->
     <section class="panel" id="panel-saved" role="tabpanel" aria-labelledby="tab-btn-saved">
       <div class="label-row">
-        <p class="list-hint">Clique sur un mot de passe pour le copier.</p>
+        <p class="list-hint">Clique un mot de passe pour le copier, ou l'éclair pour le coller dans la page.</p>
         <button type="button" class="icon-btn eye-toggle panel-reveal-toggle" id="toggle-saved-passwords" aria-expanded="false" aria-label="Afficher les mots de passe en clair">
           <svg class="icon icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           <svg class="icon icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.6 20.6 0 0 1 5.06-5.94M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 8 11 8a20.6 20.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -68,8 +49,8 @@
 
       <ul class="saved-list" id="saved-list"></ul>
       <p class="saved-empty" id="saved-empty">
-        Rien d'enregistré pour l'instant. Génère un mot de passe dans l'onglet
-        Générateur, puis clique sur "Enregistrer ce service".
+        Rien d'enregistré pour l'instant. Passe sur l'onglet "Générateur" pour
+        créer et sauvegarder ton premier service.
       </p>
       <p class="saved-empty" id="saved-no-match" hidden>Aucun service ne correspond à ta recherche.</p>
 
@@ -79,15 +60,8 @@
     <!-- Générateur -->
     <section class="panel" id="panel-generator" role="tabpanel" aria-labelledby="tab-btn-generator" hidden>
       <div class="field">
-        <div class="label-row">
-          <label for="gen-service">Service</label>
-          <button type="button" class="help-toggle" aria-expanded="false" aria-controls="generator-intro" aria-label="Aide">?</button>
-        </div>
+        <label for="gen-service">Service</label>
         <input type="text" id="gen-service" placeholder="ex : github.com" autocomplete="off" spellcheck="false">
-        <p class="field-note" id="generator-intro">
-          Les mêmes informations produisent toujours le même mot de passe. Change
-          la version pour en générer un nouveau si un compte est compromis.
-        </p>
       </div>
 
       <div class="field">
@@ -118,7 +92,7 @@
       </div>
 
       <div class="actions">
-        <button type="button" class="primary-btn" data-action="generate" data-scope="gen">Générer</button>
+        <button type="button" class="primary-btn" id="gen-generate-btn">Générer</button>
       </div>
 
       <div class="field">
@@ -133,43 +107,10 @@
       </div>
 
       <div class="actions">
-        <button type="button" class="primary-btn secondary" data-action="save" data-scope="gen">Enregistrer ce service</button>
+        <button type="button" class="primary-btn secondary" id="gen-save-btn">Enregistrer ce service</button>
       </div>
 
       <p class="message" id="gen-message" role="status" aria-live="polite"></p>
-    </section>
-
-    <!-- Secret -->
-    <section class="panel" id="panel-secret" role="tabpanel" aria-labelledby="tab-btn-secret" hidden>
-      <div class="field">
-        <div class="label-row">
-          <label for="secret-plain">Texte clair</label>
-          <button type="button" class="help-toggle" aria-expanded="false" aria-controls="secret-intro" aria-label="Aide">?</button>
-        </div>
-        <textarea id="secret-plain" rows="3" placeholder="Ce que tu veux protéger..." autocomplete="off" spellcheck="false"></textarea>
-        <p class="field-note" id="secret-intro">Chiffre une note (mot de passe, code, information sensible) que tu pourras rouvrir avec le même Master Secret.</p>
-      </div>
-
-      <div class="actions">
-        <button type="button" class="primary-btn" data-action="encrypt" data-scope="secret">Chiffrer</button>
-      </div>
-
-      <div class="field">
-        <label for="secret-cipher">Secret chiffré</label>
-        <div class="input-wrap">
-          <textarea id="secret-cipher" rows="3" placeholder="PC2...." autocomplete="off" spellcheck="false"></textarea>
-          <button type="button" class="icon-btn copy-btn textarea-copy" data-target="secret-cipher" aria-label="Copier le secret chiffré">
-            <svg class="icon icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            <svg class="icon icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          </button>
-        </div>
-      </div>
-
-      <div class="actions">
-        <button type="button" class="primary-btn secondary" data-action="decrypt" data-scope="secret">Déchiffrer</button>
-      </div>
-
-      <p class="message" id="secret-message" role="status" aria-live="polite"></p>
     </section>
 
     <!-- Réglages : pas un onglet, ouvert via l'icône ⚙ de l'en-tête. -->
@@ -190,17 +131,14 @@
         </div>
         <p class="list-hint">
           Transfère ta liste de services (jamais les mots de passe ni le
-          Master Secret) vers un autre appareil ou vers l'extension
-          navigateur.
+          Master Secret) depuis/vers le site ou un autre appareil.
         </p>
       </div>
 
       <p class="message" id="settings-message" role="status" aria-live="polite"></p>
     </section>
-
-    <p class="footnote">100&nbsp;% local — rien n'est jamais envoyé à un serveur. Le Master Secret et les mots de passe générés ne sont jamais enregistrés ; seuls les services que tu choisis de sauvegarder restent sur cet appareil.</p>
   </main>
 
-  <script type="module" src="asset/js/app.js"></script>
+  <script type="module" src="popup.js"></script>
 </body>
 </html>

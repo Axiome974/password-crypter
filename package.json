@@ -1,0 +1,11 @@
+{
+  "name": "password-crypter",
+  "private": true,
+  "type": "module",
+  "description": "Outil 100% client-side, sans dépendance, pour chiffrer des notes et générer des mots de passe déterministes. Ce package.json ne sert qu'à faire tourner les tests en local avec Node — le site lui-même n'a besoin d'aucun build ni d'aucun paquet npm.",
+  "scripts": {
+    "test": "node --test",
+    "generate-icons": "node scripts/generate-icons.mjs",
+    "sync-extension": "node scripts/sync-extension-assets.mjs"
+  }
+}

@@ -1,0 +1,35 @@
+/* Surcharge le style.css partagé (pensé pour une page plein écran) : un popup
+   d'extension doit grandir avec son contenu, pas forcer 100dvh — sinon Chrome le
+   rendrait minuscule/cassé. Chargé après style.css dans popup.html. */
+
+html {
+  height: auto;
+  overflow: visible;
+}
+
+body {
+  height: auto;
+  min-height: 0;
+  width: 380px;
+  overflow: visible;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 16px;
+}
+
+.card {
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  box-shadow: none;
+}
+
+/* Le popup est déjà étroit par nature : jamais besoin d'un mode "encore plus
+   compact", et surtout pas de replier les textes d'aide derrière un "?" qu'on
+   n'a pas câblé ici (voir popup.html, qui évite .field-note pour cette raison). */
+@media (max-width: 480px), (max-height: 760px) {
+  .card {
+    padding: 22px 20px 18px;
+  }
+}

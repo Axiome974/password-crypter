@@ -1,0 +1,16 @@
+{
+  "name": "Password Crypter",
+  "short_name": "PW Crypter",
+  "description": "Chiffre des notes et génère des mots de passe déterministes localement dans le navigateur, à partir d'un seul Master Secret jamais stocké.",
+  "lang": "fr",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#0f1221",
+  "theme_color": "#7c5cff",
+  "icons": [
+    { "src": "asset/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "asset/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "asset/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

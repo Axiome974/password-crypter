@@ -1,27 +1,266 @@
 # Password Crypter
 
-Petit outil 100 % vanilla (HTML/CSS/JS, sans dépendance) pour générer un mot de
-passe unique et reproductible à partir d'une clé secrète — et retrouver
-l'original à l'inverse, avec la même clé.
+Outil 100 % client-side (HTML/CSS/JS vanilla, sans framework ni dépendance
+d'exécution) pour gérer des secrets à partir d'un seul **Master Secret**
+mémorisé, jamais stocké, jamais transmis. Tout le calcul cryptographique se
+fait dans le navigateur, via l'API Web Crypto native.
 
-## Comment ça marche
+Trois onglets, dans l'ordre où ils apparaissent (le plus utilisé au quotidien
+en premier, pensé pour vivre à côté d'un gestionnaire comme Bitwarden) :
 
-Chaque caractère du mot de passe est XORé (au niveau de son index dans un
-alphabet de 64 caractères) avec le caractère correspondant de la clé, répétée
-en boucle. Le XOR étant sa propre opération inverse, chiffrer et déchiffrer
-utilisent exactement le même calcul : les deux champs se recalculent l'un
-l'autre en direct, quel que soit celui que tu modifies.
+- **Enregistrés** — onglet par défaut. Liste des services sauvegardés.
+  Renseigne ton Master Secret (le calcul se relance dès que le champ perd le
+  focus ou sur Entrée, tant que tu es sur cet onglet) : les mots de passe
+  sont recalculés à la volée et affichés masqués (des points) ; un clic sur
+  une ligne copie le mot de passe en clair dans le presse-papiers, sans
+  jamais l'afficher par erreur. Un bouton dédié permet de tout révéler en
+  clair d'un coup. À partir de 8 services enregistrés, un champ de recherche
+  apparaît pour filtrer par service/identifiant en direct.
+- **Générateur** — recalcule un mot de passe fort de façon déterministe à
+  partir du Master Secret + service + identifiant + version, sans jamais
+  l'enregistrer nulle part.
+- **Secret** — chiffre une note (texte libre, ou un indice personnel pour
+  retrouver un mot de passe oublié) que tu ne peux rouvrir qu'avec le même
+  Master Secret.
 
-⚠️ C'est un outil ludique de mémorisation, pas un algorithme de chiffrement
-robuste — ne t'en sers pas pour protéger un vrai secret sensible.
+## Format de chiffrement — `secret/v2` (préfixe `PC2.`)
+
+```
+PBKDF2-SHA256 (600 000 itérations, salt aléatoire 16 octets)
+  → clé AES-256
+AES-256-GCM (IV aléatoire 12 octets, AAD = "password-crypter/secret/v2")
+```
+
+Le blob final est `PC2.` + base64url(JSON `{v, kdf, iter, salt, iv, ct}`) —
+texte, copiable, collable, autonome (tout ce qu'il faut au déchiffrement,
+sauf le Master Secret, est dans le blob). AES-GCM authentifie le contenu : une
+mauvaise clé ou un blob altéré échoue proprement au lieu de rendre du texte
+corrompu. Le format est versionné (`v: 2`) pour permettre un futur `v3` sans
+casser la lecture des secrets existants.
+
+Code : `asset/js/crypto/keyDerivation.js`, `asset/js/crypto/encryption.js`.
+
+## Générateur déterministe — `generator/v1`
+
+```
+Master Secret
+  → PBKDF2-SHA256 (salt fixe = namespace, 200 000 itérations)
+  → clé dérivée
+  → HMAC-SHA-256(clé, JSON[namespace, service, identifiant, version])
+  → flux d'octets étendu en mode compteur si besoin
+  → mappage vers l'alphabet du profil choisi (rejection sampling, sans biais)
+```
+
+Namespace fixe et versionné : `password-crypter/generator/v1`. Mêmes entrées
+= même mot de passe, à chaque fois, pour toujours — c'est tout l'intérêt :
+rien à synchroniser, rien à sauvegarder. Changer la version régénère un mot
+de passe totalement différent (utile pour révoquer un mot de passe compromis
+sans changer de Master Secret).
+
+Normalisation (`normalizeGeneratorInputs()`, centralisée et volontairement
+minimale) : `service` en minuscules et sans espaces superflus, `identifiant`
+sans espaces superflus (casse conservée), `version` entier. Le Master Secret
+n'est jamais modifié.
+
+Profils : Standard (lettres, chiffres, symboles), Alphanumérique, Sans
+caractères ambigus (exclut `0 O o 1 l I`), Chiffres uniquement (pour les
+sites — souvent bancaires — qui n'acceptent qu'un code numérique). Longueur
+libre entre 6 et 32 (défaut 20) : cette borne est une contrainte d'interface
+(`MIN_LENGTH`/`MAX_LENGTH` dans `deterministicPassword.js`), pas une limite
+du calcul crypto lui-même, qui accepte n'importe quelle longueur positive.
+
+Cet algorithme est figé pour toujours sous le nom `generator/v1` : une
+évolution future crée `generator/v2` à côté plutôt que de le modifier — voir
+le test à vecteur fixe dans `tests/deterministicPassword.test.js`, qui doit
+échouer si jamais ce comportement changeait silencieusement.
+
+Code : `asset/js/crypto/deterministicPassword.js`.
+
+## Services enregistrés (`localStorage`)
+
+Onglet "Enregistrés" : une liste de `{service, username, version, length,
+profile}` que tu choisis explicitement de sauvegarder (bouton "Enregistrer ce
+service" dans le générateur). `length`/`profile` sont indispensables : sans
+eux, recalculer depuis cette liste pourrait donner un mot de passe différent
+de celui réellement utilisé si un profil ou une longueur non standard avait
+été choisi. Clé par `service + identifiant` : ré-enregistrer avec une version
+différente remplace l'entrée existante au lieu d'empiler des doublons.
+
+L'app recalcule (avec le Master Secret présent à cet instant dans le champ
+partagé) le mot de passe de chaque entrée enregistrée et l'affiche masqué
+(des points), jamais en clair par défaut. Un clic sur une ligne copie le mot
+de passe réel dans le presse-papiers ; un bouton dédié permet de révéler tout
+en clair d'un coup. Volontairement pas de recalcul en live à chaque frappe du
+Master Secret (PBKDF2 est lent par design) : le recalcul se déclenche à
+l'activation de l'onglet "Enregistrés", et — comme c'est l'onglet ouvert par
+défaut, donc souvent celui où on tape son Master Secret pour la première fois
+— aussi quand ce champ perd le focus ou sur Entrée.
+
+À partir de 8 entrées, un champ de recherche apparaît pour filtrer la liste
+par service ou identifiant (filtrage pur côté affichage, aucun recalcul
+crypto déclenché).
+
+Ce qui n'est **jamais** stocké : le Master Secret, et le mot de passe généré
+lui-même — ce dernier vit uniquement en mémoire (un `Map` JS, jamais persisté
+sur disque) le temps de la session, tant que l'onglet "Enregistrés" a été
+ouvert. Sans le Master Secret, la liste stockée ne permet à personne de
+reconstruire un mot de passe — au pire elle révèle quels comptes existent
+sur cet appareil, exactement comme la liste de sites d'un gestionnaire de
+mots de passe classique.
+
+Le site utilise `localStorage` (portée à l'origine du site, illisible par
+d'autres sites). `asset/js/storage/savedServices.js` expose une API 100%
+async (`getItem`/`setItem` sur le store passé en paramètre) précisément pour
+pouvoir brancher un autre backend sans rien changer à la logique — c'est ce
+que fait l'extension de navigateur (voir plus bas) avec `chrome.storage.local`.
+
+### Réglages, export / import
+
+Icône ⚙ dans l'en-tête (site et extension) : ouvre une vue "Réglages" à part
+— pas un onglet parmi les autres, une bascule qui masque temporairement les
+onglets et revient sur celui qu'on regardait avant (bouton "← Retour").
+Pensé pour accueillir d'autres réglages plus tard (thème...), pour l'instant
+elle ne contient que l'export/import.
+
+Boutons "Exporter"/"Importer", pour transférer sa liste de services vers un
+autre appareil ou entre le site et l'extension. Fichier JSON téléchargé/relu
+directement dans
+le navigateur (`Blob` + `<a download>` / `<input type="file">`), aucun
+serveur impliqué. Contenu du fichier : exactement le même modèle que le
+stockage — `{service, username, version, length, profile}` par entrée,
+**jamais** un mot de passe ni le Master Secret. Le pire cas de fuite si ce
+fichier traîne quelque part reste "voici mes comptes", pas "voici mes mots
+de passe".
+
+Format versionné indépendamment du stockage interne (`EXPORT_FORMAT_VERSION`,
+distinct du `SCHEMA_VERSION` de `localStorage`/`chrome.storage.local`) pour
+qu'un fichier exporté aujourd'hui reste lisible même si le format de
+stockage change un jour. Importer réutilise `saveService()` pour chaque
+entrée — même normalisation, mêmes bornes de longueur, et upsert par
+service+identifiant : une entrée importée qui existe déjà en local est
+remplacée par la version du fichier plutôt que dupliquée. Un fichier
+malformé, d'un autre type, ou d'une version d'export non supportée est
+rejeté avec un message clair ; une entrée individuellement invalide dans un
+fichier par ailleurs correct est ignorée sans bloquer l'import du reste.
+
+## Extension de navigateur (`extension/`)
+
+Popup à deux onglets, volontairement sans l'onglet "Secret" (pas de cas
+d'usage évident pour chiffrer une note depuis un popup d'extension) :
+
+- **Enregistrés** (par défaut) — copier / révéler / supprimer / filtrer,
+  identique à l'onglet du même nom sur le site.
+- **Générateur** — mêmes champs que sur le site (service, identifiant,
+  version, longueur, profil), avec "Générer" et "Enregistrer ce service" :
+  de quoi créer un nouveau mot de passe entièrement depuis l'extension, sans
+  jamais rouvrir le site.
+
+En plus du clic-pour-copier, chaque ligne a un bouton éclair : il colle le
+mot de passe directement dans le premier `<input type="password">` trouvé
+sur la page active (`chrome.scripting.executeScript`, permission
+`activeTab` — pas d'accès permanent à tous les sites visités). Passe par le
+setter natif de `HTMLInputElement` puis déclenche un vrai événement `input`
+avant/après: sur les sites en React/Vue, une simple assignation
+`input.value = ...` est invisible pour le framework et le formulaire semble
+rempli mais soumet une valeur vide. Limites assumées (volontairement, pour
+rester simple) : le premier champ mot de passe trouvé n'est pas forcément le
+bon s'il y en a plusieurs sur la page (ex. formulaire de changement de mot de
+passe), et un champ dans une iframe n'est pas vu. Le copier-coller reste le
+filet de sécurité dans ces cas, rares en pratique.
+
+Architecture : `extension/popup.js` importe
+`asset/js/crypto/deterministicPassword.js` et `asset/js/storage/savedServices.js`
+depuis `extension/asset/js/...` — une **copie** de ces fichiers (et de
+`asset/style/style.css`), pas le fichier original. `extension/storageAdapter.js`
+fournit l'adaptateur `chrome.storage.local` ; tout le reste du code (dérivation
+de clé, HMAC, mapping vers l'alphabet, normalisation, upsert par
+service+identifiant...) est strictement le même que sur le site.
+
+On a d'abord essayé un lien symbolique (`extension/asset -> ../asset`) pour
+éviter la duplication — ça résout bien en Node, mais Chrome ne le suit **pas**
+quand il sert les fichiers d'une extension non empaquetée : le popup se
+chargeait sans CSS ni JS, silencieusement (aucune erreur, juste du HTML brut).
+Une vraie copie, régénérée par un script, est plus verbeuse mais fonctionne
+partout :
+
+```
+npm run sync-extension
+```
+
+**À relancer après toute modification** de `asset/js/crypto/`,
+`asset/js/storage/` ou `asset/style/style.css`, avant de recharger l'extension
+dans le navigateur — sinon elle continue de tourner sur l'ancienne copie.
+`extension/asset/` est généré (regénérable à volonté), pas une source de
+vérité.
+
+### Installer l'extension en local
+
+1. `npm run sync-extension` (au moins une fois, puis à chaque modif du code
+   partagé).
+2. `chrome://extensions` (ou l'équivalent Edge/Brave/Firefox) → active le
+   "mode développeur".
+3. "Charger l'extension non empaquetée" → sélectionne le dossier `extension/`
+   (pas la racine du dépôt).
+4. Épingle l'icône, ouvre le popup, renseigne ton Master Secret.
+
+## Sécurité de l'interface
+
+Le Master Secret n'est jamais écrit dans `localStorage`/`sessionStorage`, une
+URL, ni loggé. Champ `type="password"` avec bascule d'affichage temporaire,
+`autocomplete="off"`. Aucune requête vers un serveur tiers : les seules
+requêtes réseau sont celles, internes au navigateur, que fait le service
+worker pour mettre en cache ses propres fichiers statiques (voir plus bas).
+
+## PWA — installation et hors-ligne
+
+Le site est installable (bouton "Installer" du navigateur, ou "Ajouter à
+l'écran d'accueil" sur mobile) et fonctionne hors-ligne une fois visité une
+première fois :
+
+- `manifest.webmanifest` déclare le nom, les icônes et le mode `standalone`.
+- `sw.js`, servi à la racine (pas dans `asset/js/`) pour que son scope
+  couvre toute l'app même si GitHub Pages sert le projet sous un
+  sous-chemin, met en cache l'app shell (HTML/CSS/JS/icônes) à l'install et
+  sert depuis le cache en priorité, avec revalidation réseau en arrière-plan.
+- Les icônes (`asset/icons/*.png`) sont générées par `scripts/generate-icons.mjs`
+  (pur Node + zlib, sans dépendance ni outil système comme rsvg-convert) à
+  partir des masters `asset/icons/{icon,icon-maskable}.svg` — relance-le si
+  tu changes le dessin ou les couleurs de l'icône.
+
+Si tu modifies un fichier mis en cache (JS, CSS...), pense à incrémenter
+`CACHE_NAME` dans `sw.js`, sinon les utilisateurs ayant déjà installé l'app
+continueront de voir l'ancienne version jusqu'à la revalidation en arrière-plan.
+Pendant le développement, active "Update on reload" dans l'onglet Application
+> Service Workers des devtools pour éviter de servir du cache périmé.
+
+## Ce que ce n'est pas
+
+Pas un algorithme maison : tout repose sur `crypto.subtle` (PBKDF2, AES-GCM,
+HMAC), aucune primitive cryptographique n'est réinventée.
+
+## Tests
+
+```
+npm test
+```
+
+Lance la suite Node native (`node --test`, zéro dépendance) : aller-retour
+chiffrement/déchiffrement, échec sur mauvaise clé ou contenu altéré,
+non-déterminisme du chiffrement (deux blobs différents pour le même texte),
+déterminisme et isolation du générateur (changer service/identifiant/version
+change le résultat), vecteur de test figé pour `generator/v1`, et la liste des
+services enregistrés (upsert par service+identifiant, suppression, tri,
+tolérance aux données corrompues) via un faux `localStorage` en mémoire.
 
 ## Utilisation en local
 
-Ouvre simplement `index.html` dans un navigateur, aucune installation ni build
-requis.
+Ouvre `index.html` dans un navigateur (les modules ES nécessitent un serveur
+HTTP, pas `file://` — par exemple `python3 -m http.server` depuis ce
+dossier). Aucune installation ni build requis pour faire fonctionner le site
+lui-même ; `package.json` ne sert qu'à faire tourner les tests en local.
 
 ## Déploiement
 
-Le projet est une page statique prête pour GitHub Pages : active Pages sur la
-branche `main` (dossier racine `/`) dans les paramètres du dépôt, sans
-configuration supplémentaire.
+Page statique prête pour GitHub Pages : active Pages sur la branche `main`
+(dossier racine `/`) dans les paramètres du dépôt, sans configuration
+supplémentaire.
