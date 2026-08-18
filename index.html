@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Password Crypter</title>
+  <meta name="description" content="Génère un mot de passe unique et reproductible à partir d'une clé secrète, et retrouve-le à l'inverse.">
+  <link rel="stylesheet" href="asset/style/style.css">
+</head>
+<body>
+  <main class="card">
+    <h1>Password Crypter</h1>
+    <p class="subtitle">
+      Combine une clé secrète et un mot de passe pour obtenir une version unique,
+      reproductible à chaque fois. Ça marche dans les deux sens.
+    </p>
+
+    <div class="field">
+      <label for="key">Clé secrète</label>
+      <div class="input-wrap">
+        <input type="password" id="key" placeholder="ex : Groscacaboudin1990" autocomplete="off" spellcheck="false">
+        <button type="button" class="icon-btn" id="toggle-key" aria-label="Afficher la clé">
+          <svg class="icon icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg class="icon icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.6 20.6 0 0 1 5.06-5.94M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 8 11 8a20.6 20.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="clear">Mot de passe clair</label>
+      <div class="input-wrap">
+        <input type="text" id="clear" placeholder="ex : monsupersite" autocomplete="off" spellcheck="false">
+        <button type="button" class="icon-btn copy-btn" data-target="clear" aria-label="Copier le mot de passe clair">
+          <svg class="icon icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <svg class="icon icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="swap" aria-hidden="true">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v14M8 17l-4-4M8 17l4-4"/><path d="M16 21V7M16 7l-4 4M16 7l4 4"/></svg>
+    </div>
+
+    <div class="field">
+      <label for="cipher">Mot de passe chiffré</label>
+      <div class="input-wrap">
+        <input type="text" id="cipher" placeholder="Résultat chiffré..." autocomplete="off" spellcheck="false">
+        <button type="button" class="icon-btn copy-btn" data-target="cipher" aria-label="Copier le mot de passe chiffré">
+          <svg class="icon icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <svg class="icon icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <p class="hint">
+      Tape dans un des deux champs de mot de passe : l'autre se recalcule tout seul avec la clé.
+      Colle un mot de passe chiffré avec la même clé pour retrouver l'original.
+    </p>
+
+    <p class="footnote">100&nbsp;% local — rien n'est envoyé, ni stocké, ni enregistré nulle part.</p>
+  </main>
+
+  <script src="asset/js/app.js"></script>
+</body>
+</html>

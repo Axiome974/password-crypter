@@ -1,0 +1,224 @@
+:root {
+  --bg-1: #0f1221;
+  --bg-2: #1b1f3b;
+  --accent: #7c5cff;
+  --accent-2: #35d6c4;
+  --card-bg: rgba(255, 255, 255, 0.06);
+  --card-border: rgba(255, 255, 255, 0.12);
+  --text: #f2f1fa;
+  --text-dim: #a5a3c2;
+  --input-bg: rgba(0, 0, 0, 0.25);
+  --input-border: rgba(255, 255, 255, 0.14);
+  --input-border-focus: var(--accent-2);
+  --success: #35d6c4;
+  --shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.6);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-1: #eef0ff;
+    --bg-2: #dfe4ff;
+    --accent: #6a4ff2;
+    --accent-2: #12a397;
+    --card-bg: rgba(255, 255, 255, 0.75);
+    --card-border: rgba(30, 20, 80, 0.1);
+    --text: #201c40;
+    --text-dim: #5c5880;
+    --input-bg: rgba(255, 255, 255, 0.6);
+    --input-border: rgba(30, 20, 80, 0.15);
+    --input-border-focus: var(--accent);
+    --success: #12a397;
+    --shadow: 0 30px 60px -25px rgba(60, 40, 120, 0.35);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--text);
+  background: radial-gradient(circle at 20% 15%, var(--bg-2), var(--bg-1) 60%);
+  background-attachment: fixed;
+}
+
+.card {
+  width: 100%;
+  max-width: 460px;
+  padding: 36px 32px 28px;
+  border-radius: 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.subtitle {
+  margin: 0 0 28px;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.field {
+  margin-bottom: 6px;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+.input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+input[type="text"],
+input[type="password"] {
+  width: 100%;
+  padding: 13px 44px 13px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="text"]::placeholder,
+input[type="password"]::placeholder {
+  color: var(--text-dim);
+  opacity: 0.6;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus {
+  border-color: var(--input-border-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--input-border-focus) 25%, transparent);
+}
+
+.icon-btn {
+  position: absolute;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.icon-btn:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text);
+}
+
+.icon-btn:active {
+  transform: scale(0.94);
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+}
+
+.icon-eye-off,
+.icon-check {
+  display: none;
+}
+
+#toggle-key.revealed .icon-eye {
+  display: none;
+}
+
+#toggle-key.revealed .icon-eye-off {
+  display: block;
+}
+
+.copy-btn.copied {
+  color: var(--success);
+}
+
+.copy-btn.copied .icon-copy {
+  display: none;
+}
+
+.copy-btn.copied .icon-check {
+  display: block;
+}
+
+.swap {
+  display: flex;
+  justify-content: center;
+  margin: 4px 0;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
+.swap .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.hint {
+  margin: 22px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.footnote {
+  margin: 16px 0 0;
+  font-size: 0.74rem;
+  color: var(--text-dim);
+  opacity: 0.7;
+  text-align: center;
+}
+
+@media (max-width: 400px) {
+  .card {
+    padding: 28px 20px 22px;
+    border-radius: 16px;
+  }
+}
