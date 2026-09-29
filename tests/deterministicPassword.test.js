@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { generateV1, PROFILES } from "../asset/js/crypto/deterministicPassword.js";
+import {
+  generateV1,
+  generateV1WithKey,
+  deriveGeneratorKeyBytes,
+  importGeneratorKey,
+  PROFILES,
+} from "../asset/js/crypto/deterministicPassword.js";
 
 const base = { service: "github.com", username: "damien", version: 1 };
 
@@ -92,4 +98,13 @@ test("generator/v1 fixed test vector", async () => {
     profile: "standard",
   });
   assert.equal(password, "=Yd*c4VzUCOKu^kExceC");
+});
+
+test("generateV1WithKey with a cached key matches generateV1 exactly", async () => {
+  const keyBytes = await deriveGeneratorKeyBytes("master secret");
+  assert.equal(keyBytes.length, 32);
+  const key = await importGeneratorKey(keyBytes);
+  for (const entry of [base, { ...base, profile: "digits", length: 8 }, { ...base, version: 3 }]) {
+    assert.equal(await generateV1WithKey(key, entry), await generateV1("master secret", entry));
+  }
 });

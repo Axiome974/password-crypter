@@ -484,6 +484,48 @@ input[readonly] {
   overflow-wrap: anywhere;
 }
 
+/* Identifiant cliquable (copie) : reste discret, comme du texte, jusqu'au survol. */
+.saved-item-username-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  margin: 0 -4px;
+  padding: 1px 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.saved-item-username-copy .icon {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+
+.saved-item-username-copy:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text);
+}
+
+.saved-item-username-copy.copied {
+  color: var(--success);
+}
+
+.saved-item-username-copy.copied .icon-copy {
+  display: none;
+}
+
+.saved-item-username-copy.copied .icon-check {
+  display: block;
+}
+
 .saved-item-autofill,
 .saved-item-delete {
   position: static;

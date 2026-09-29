@@ -155,9 +155,18 @@ d'usage évident pour chiffrer une note depuis un popup d'extension) :
   de quoi créer un nouveau mot de passe entièrement depuis l'extension, sans
   jamais rouvrir le site.
 
-En plus du clic-pour-copier, chaque ligne a un bouton éclair : il colle le
-mot de passe directement dans le premier `<input type="password">` trouvé
-sur la page active (`chrome.scripting.executeScript`, permission
+Sur le site comme dans l'extension, un clic sur l'identifiant (icône copier)
+le copie, comme un clic sur le mot de passe.
+
+En plus du clic-pour-copier, chaque ligne a un bouton éclair : il remplit le
+premier `<input type="password">` visible de la page active et, si le service
+a un identifiant, le champ qui s'y apparente juste avant (priorité à
+`autocomplete="username"`/`email`, puis `type="email"`, puis un nom/id/placeholder
+évocateur ; à défaut, le champ texte du même formulaire). Connexions en deux
+étapes (Google, Microsoft…) : sans champ mot de passe, seul l'identifiant est
+rempli, et uniquement sur un champ clairement reconnu, jamais une barre de
+recherche ; on reclique sur l'éclair à l'étape suivante. Le tout passe par
+`chrome.scripting.executeScript`, permission
 `activeTab` — pas d'accès permanent à tous les sites visités). Passe par le
 setter natif de `HTMLInputElement` puis déclenche un vrai événement `input`
 avant/après: sur les sites en React/Vue, une simple assignation
@@ -167,6 +176,34 @@ rester simple) : le premier champ mot de passe trouvé n'est pas forcément le
 bon s'il y en a plusieurs sur la page (ex. formulaire de changement de mot de
 passe), et un champ dans une iframe n'est pas vu. Le copier-coller reste le
 filet de sécurité dans ces cas, rares en pratique.
+
+**Détection du site actif** (`extension/serviceDetection.js`, module pur testé
+sous Node) : l'URL de l'onglet actif (lisible grâce à `activeTab`, sans la
+permission `tabs`) est ramenée à son domaine enregistrable (`accounts.google.com`
+→ `google.com`, `www.amazon.co.uk` → `amazon.co.uk`, `alice.github.io` reste
+tel quel). Dans **Enregistrés**, les services qui correspondent à ce site
+(domaine, sous-domaine, URL collée ou nom nu comme `github`) remontent en tête
+sous un titre "Sur ce site". Dans **Générateur**, le champ service est
+pré-rempli avec ce domaine s'il est vide, avec un indice rappelant qu'il a été
+deviné : le service fait partie de la recette du mot de passe, rien n'est donc
+jamais changé sans que ce soit visible.
+
+**Se souvenir pendant…** (`extension/masterSession.js`, désactivé par défaut,
+5 min / 15 min / 1 h) : on ne garde **jamais le Master Secret**, seulement la
+clé HMAC du générateur déjà dérivée par PBKDF2 (le sel du générateur étant
+fixe, elle ne dépend que du Master Secret). Si elle fuitait, elle permettrait
+de recalculer les mots de passe du générateur, mais ni de retrouver le Master
+Secret ni de déchiffrer les secrets `PC2.`. Stockée dans
+`chrome.storage.session` (en mémoire uniquement, vidé à la fermeture du
+navigateur, inaccessible aux content scripts), avec une expiration absolue
+vérifiée à chaque lecture et une alarme (`chrome.alarms` + `background.js`)
+qui l'efface à l'échéance même si le popup n'est jamais rouvert. Interface :
+un petit menu horloge au bout du champ Master Secret pour choisir la durée ;
+une fois la clé mémorisée, une barre de temps restant (orangée la dernière
+minute) remplace le texte d'aide, avec un cadenas pour verrouiller tout de
+suite. Repasser sur "Non" l'oublie aussi.
+Bonus : une seule dérivation PBKDF2 pour toute la liste au lieu d'une par
+service.
 
 Architecture : `extension/popup.js` importe
 `asset/js/crypto/deterministicPassword.js` et `asset/js/storage/savedServices.js`

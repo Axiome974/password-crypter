@@ -8,7 +8,7 @@
 
 // À incrémenter à chaque changement de fichiers mis en cache, pour forcer la purge
 // de l'ancien cache chez les utilisateurs déjà installés.
-const CACHE_NAME = "password-crypter-v8";
+const CACHE_NAME = "password-crypter-v9";
 
 const PRECACHE_URLS = [
   "./",

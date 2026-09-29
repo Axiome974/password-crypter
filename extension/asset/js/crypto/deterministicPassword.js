@@ -6,7 +6,7 @@
 // generator/v2 à côté, jamais modifier celui-ci (une refacto ne doit jamais changer un
 // mot de passe déjà généré par v1).
 
-import { deriveHmacKey } from "./keyDerivation.js";
+import { deriveHmacKey, deriveHmacKeyBytes, importHmacKey } from "./keyDerivation.js";
 
 const NAMESPACE = "password-crypter/generator/v1";
 const ITERATIONS = 200000;
@@ -72,8 +72,27 @@ async function mapKeystreamToAlphabet(hmacKey, message, alphabet, length) {
   return result; // inatteignable en pratique : la boucle ci-dessus retourne toujours avant
 }
 
-export async function generateV1(
-  masterSecret,
+// Le sel étant fixe, la clé HMAC ne dépend que du Master Secret : on peut la dériver
+// une fois (PBKDF2, lent) puis la réutiliser pour tous les services. C'est ce qui permet
+// à l'extension de la mémoriser un temps limité sans jamais garder le Master Secret
+// lui-même (voir extension/masterSession.js). Octets bruts : à manipuler comme un secret.
+export async function deriveGeneratorKeyBytes(masterSecret) {
+  return deriveHmacKeyBytes(masterSecret, NAMESPACE_SALT, ITERATIONS);
+}
+
+export async function importGeneratorKey(keyBytes) {
+  return importHmacKey(keyBytes);
+}
+
+export async function generateV1(masterSecret, entry) {
+  const hmacKey = await deriveHmacKey(masterSecret, NAMESPACE_SALT, ITERATIONS);
+  return generateV1WithKey(hmacKey, entry);
+}
+
+// Même algorithme que generateV1(), à partir d'une clé déjà dérivée (deriveGeneratorKeyBytes
+// + importGeneratorKey) : évite de repayer PBKDF2 à chaque service.
+export async function generateV1WithKey(
+  hmacKey,
   { service, username, version, length = DEFAULT_LENGTH, profile = "standard" }
 ) {
   const alphabet = PROFILES[profile];
@@ -83,7 +102,6 @@ export async function generateV1(
   }
 
   const normalized = normalizeGeneratorInputs({ service, username, version });
-  const hmacKey = await deriveHmacKey(masterSecret, NAMESPACE_SALT, ITERATIONS);
   const message = JSON.stringify([
     NAMESPACE,
     normalized.service,

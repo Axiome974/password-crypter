@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Password Crypter",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Retrouve et copie tes mots de passe déterministes à partir d'un seul Master Secret, jamais stocké.",
   "action": {
     "default_popup": "popup.html",
@@ -16,5 +16,14 @@
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
   },
-  "permissions": ["storage", "activeTab", "scripting"]
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "alarms"
+  ]
 }

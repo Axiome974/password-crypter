@@ -33,3 +33,196 @@ body {
     padding: 22px 20px 18px;
   }
 }
+
+/* --- "Se souvenir pendant…" : menu horloge dans le champ Master Secret, puis barre
+   de temps restant + cadenas à la place du texte d'aide --- */
+
+#master-secret {
+  padding-right: 124px;
+}
+
+.remember-trigger {
+  position: absolute;
+  top: 50%;
+  right: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.remember-trigger .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.remember-trigger .remember-caret {
+  width: 11px;
+  height: 11px;
+  opacity: 0.7;
+}
+
+.remember-trigger:hover,
+.remember-trigger[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text);
+}
+
+.remember-trigger.active {
+  border-color: color-mix(in srgb, var(--accent-2) 45%, transparent);
+  color: var(--accent-2);
+}
+
+.remember-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 38px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  padding: 6px;
+  border: 1px solid var(--input-border);
+  border-radius: 12px;
+  background: var(--bg-2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.remember-menu[hidden] {
+  display: none;
+}
+
+.remember-menu-title {
+  margin: 2px 8px 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.remember-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.86rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.remember-menu button:hover,
+.remember-menu button:focus-visible {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  outline: none;
+}
+
+.remember-menu button[aria-checked="true"] {
+  color: var(--accent-2);
+  font-weight: 600;
+}
+
+.remember-menu button[aria-checked="true"]::after {
+  content: "✓";
+}
+
+.remember-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.remember-progress[hidden] {
+  display: none;
+}
+
+.remember-track {
+  flex: 1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+}
+
+.remember-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transform-origin: left center;
+  transition: transform 1s linear, background 0.4s ease;
+}
+
+/* Dernière minute : la barre vire à l'orangé pour prévenir du verrouillage imminent. */
+.remember-track.ending .remember-fill {
+  background: linear-gradient(90deg, #ff8a5c, #ffb35c);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remember-fill {
+    transition: none;
+  }
+}
+
+.remember-lock {
+  position: static;
+  flex: none;
+  width: 28px;
+  height: 28px;
+}
+
+.remember-lock .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.remember-lock:hover {
+  background: color-mix(in srgb, #ff8a8a 18%, transparent);
+  color: #ff8a8a;
+}
+
+#master-hint {
+  margin-top: 8px;
+}
+
+.field-hint {
+  margin: 6px 0 0;
+}
+
+/* --- Enregistrés : services correspondant à l'onglet actif en tête --- */
+
+.saved-group-title {
+  margin: 4px 0 -2px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+.saved-group-title:first-child {
+  margin-top: 0;
+}
+
+.saved-item.current-site {
+  border-color: color-mix(in srgb, var(--accent-2) 55%, var(--input-border));
+}

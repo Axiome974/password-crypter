@@ -1,6 +1,12 @@
 "use strict";
 
-import { generateV1, MIN_LENGTH, MAX_LENGTH } from "./asset/js/crypto/deterministicPassword.js";
+import {
+  generateV1WithKey,
+  deriveGeneratorKeyBytes,
+  importGeneratorKey,
+  MIN_LENGTH,
+  MAX_LENGTH,
+} from "./asset/js/crypto/deterministicPassword.js";
 import {
   listSavedServices,
   saveService,
@@ -9,6 +15,14 @@ import {
   importSavedServices,
 } from "./asset/js/storage/savedServices.js";
 import { chromeStorageAdapter } from "./storageAdapter.js";
+import {
+  loadRememberMinutes,
+  saveRememberMinutes,
+  rememberGeneratorKey,
+  loadRememberedGeneratorKey,
+  forgetGeneratorKey,
+} from "./masterSession.js";
+import { serviceFromUrl, serviceMatchesUrl } from "./serviceDetection.js";
 
 const masterSecretInput = document.getElementById("master-secret");
 const toggleMasterSecretBtn = document.getElementById("toggle-master-secret");
@@ -35,13 +49,241 @@ function setMessage(el, text, type) {
   if (type) el.classList.add(type);
 }
 
-function requireMasterSecret(messageEl) {
-  const value = masterSecretInput.value;
-  if (!value) {
-    setMessage(messageEl, "Renseigne un Master Secret.", "error");
-    return null;
+// --- Clé du générateur : dérivée du Master Secret tapé, ou relue depuis la session ---
+// mémorisée ("Se souvenir pendant…", voir masterSession.js). Le Master Secret tapé est
+// toujours prioritaire sur une clé mémorisée.
+
+const rememberTrigger = document.getElementById("remember-trigger");
+const rememberTriggerLabel = document.getElementById("remember-trigger-label");
+const rememberMenu = document.getElementById("remember-menu");
+const rememberItems = Array.from(rememberMenu.querySelectorAll('[role="menuitemradio"]'));
+const rememberProgressEl = document.getElementById("remember-progress");
+const rememberTrackEl = document.getElementById("remember-track");
+const rememberFillEl = document.getElementById("remember-fill");
+const lockBtn = document.getElementById("lock-btn");
+const masterHintEl = document.getElementById("master-hint");
+const MASTER_PLACEHOLDER_DEFAULT = masterSecretInput.placeholder;
+
+// Dernière minute : la barre change de couleur pour prévenir.
+const ENDING_THRESHOLD_MS = 60_000;
+
+let rememberMinutes = 0;
+// Dérivation du Master Secret actuellement tapé (PBKDF2 est lent : on ne la refait que
+// s'il change). Uniquement en mémoire, pour la durée de vie du popup.
+let typedDerivation = null; // { secret, keyBytes, key }
+// Clé mémorisée dans chrome.storage.session, si elle existe et n'a pas expiré.
+let sessionDerivation = null; // { key, expiresAt, durationMs }
+
+function formatClock(timestamp) {
+  return new Date(timestamp).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function hasSessionKey() {
+  return sessionDerivation !== null && Date.now() < sessionDerivation.expiresAt;
+}
+
+function hasGeneratorKey() {
+  return Boolean(masterSecretInput.value) || hasSessionKey();
+}
+
+// Barre de temps restant. Rafraîchie chaque seconde avec une transition CSS d'1 s
+// linéaire vers la valeur de la seconde suivante : la barre fond en continu, sans
+// saut, et se recale d'elle-même (ex. après une mise en veille).
+function renderRememberProgress({ instant = false } = {}) {
+  const remaining = sessionDerivation.expiresAt - Date.now();
+  const ratio = Math.max(0, Math.min(1, (remaining - 1000) / sessionDerivation.durationMs));
+
+  if (instant) {
+    rememberFillEl.style.transition = "none";
+    rememberFillEl.style.transform = `scaleX(${ratio})`;
+    void rememberFillEl.offsetWidth; // applique la valeur avant de réactiver la transition
+    rememberFillEl.style.transition = "";
+  } else {
+    rememberFillEl.style.transform = `scaleX(${ratio})`;
   }
-  return value;
+
+  const label = `Verrouillage automatique à ${formatClock(sessionDerivation.expiresAt)}`;
+  rememberTrackEl.setAttribute("aria-valuenow", String(Math.round(ratio * 100)));
+  rememberTrackEl.setAttribute("aria-valuetext", label);
+  rememberTrackEl.title = label;
+  rememberTrackEl.classList.toggle("ending", remaining <= ENDING_THRESHOLD_MS);
+}
+
+function renderRememberState() {
+  const active = hasSessionKey();
+  const wasHidden = rememberProgressEl.hidden;
+  rememberProgressEl.hidden = !active;
+  masterHintEl.hidden = active;
+  masterSecretInput.placeholder = active
+    ? `Mémorisé · ${formatClock(sessionDerivation.expiresAt)}`
+    : MASTER_PLACEHOLDER_DEFAULT;
+  // Pas d'animation depuis "plein" quand la barre apparaît (ex. popup rouvert à mi-parcours).
+  if (active) renderRememberProgress({ instant: wasHidden });
+}
+
+function renderRememberMenu() {
+  const selected = rememberItems.find((item) => Number(item.dataset.minutes) === rememberMinutes);
+  for (const item of rememberItems) item.setAttribute("aria-checked", String(item === selected));
+  rememberTriggerLabel.textContent = rememberMinutes > 0 ? selected.textContent : "";
+  rememberTrigger.classList.toggle("active", rememberMinutes > 0);
+  const description = rememberMinutes > 0 ? `Se souvenir : ${selected.textContent}` : "Se souvenir : non";
+  rememberTrigger.setAttribute("aria-label", description);
+  rememberTrigger.title = description;
+}
+
+async function deriveTypedSecret(secret) {
+  if (typedDerivation?.secret !== secret) {
+    const keyBytes = await deriveGeneratorKeyBytes(secret);
+    typedDerivation = { secret, keyBytes, key: await importGeneratorKey(keyBytes) };
+  }
+  return typedDerivation;
+}
+
+async function rememberTypedDerivation(derivation) {
+  const { expiresAt, durationMs } = await rememberGeneratorKey(derivation.keyBytes, rememberMinutes);
+  sessionDerivation = { key: derivation.key, expiresAt, durationMs };
+  renderRememberState();
+}
+
+// CryptoKey HMAC à utiliser, ou null s'il n'y a ni Master Secret tapé ni clé mémorisée.
+async function resolveGeneratorKey() {
+  const secret = masterSecretInput.value;
+  if (secret) {
+    const derivation = await deriveTypedSecret(secret);
+    if (rememberMinutes > 0 && sessionDerivation?.key !== derivation.key) {
+      await rememberTypedDerivation(derivation);
+    }
+    return derivation.key;
+  }
+  if (hasSessionKey()) return sessionDerivation.key;
+  if (sessionDerivation) lock();
+  return null;
+}
+
+async function requireGeneratorKey(messageEl) {
+  const key = await resolveGeneratorKey();
+  if (!key) setMessage(messageEl, "Renseigne un Master Secret.", "error");
+  return key;
+}
+
+async function lock() {
+  sessionDerivation = null;
+  typedDerivation = null;
+  masterSecretInput.value = "";
+  computedPasswords.clear();
+  await forgetGeneratorKey();
+  renderRememberState();
+  renderSavedList();
+}
+
+async function loadSession() {
+  const remembered = await loadRememberedGeneratorKey();
+  sessionDerivation = remembered
+    ? {
+        key: await importGeneratorKey(remembered.keyBytes),
+        expiresAt: remembered.expiresAt,
+        durationMs: remembered.durationMs,
+      }
+    : null;
+  renderRememberState();
+}
+
+async function setRememberMinutes(minutes) {
+  rememberMinutes = minutes;
+  renderRememberMenu();
+  await saveRememberMinutes(rememberMinutes);
+  if (rememberMinutes === 0) {
+    // "Non" veut dire non tout de suite : on oublie aussi une clé déjà mémorisée,
+    // sans effacer le Master Secret éventuellement en cours de saisie.
+    sessionDerivation = null;
+    await forgetGeneratorKey();
+    renderRememberState();
+  } else if (masterSecretInput.value) {
+    await rememberTypedDerivation(await deriveTypedSecret(masterSecretInput.value));
+  } else if (sessionDerivation) {
+    // Nouvelle durée pour la clé déjà mémorisée : il faut repartir des octets. La barre
+    // repart pleine, sans animation.
+    const remembered = await loadRememberedGeneratorKey();
+    if (remembered) {
+      Object.assign(sessionDerivation, await rememberGeneratorKey(remembered.keyBytes, rememberMinutes));
+      rememberProgressEl.hidden = true;
+    }
+    renderRememberState();
+  }
+}
+
+// --- Menu horloge (dans le champ Master Secret) ---
+
+function openRememberMenu() {
+  rememberMenu.hidden = false;
+  rememberTrigger.setAttribute("aria-expanded", "true");
+  (rememberItems.find((item) => item.getAttribute("aria-checked") === "true") ?? rememberItems[0]).focus();
+  document.addEventListener("pointerdown", closeRememberMenuOnOutsideClick);
+}
+
+function closeRememberMenu({ focusTrigger = false } = {}) {
+  if (rememberMenu.hidden) return;
+  rememberMenu.hidden = true;
+  rememberTrigger.setAttribute("aria-expanded", "false");
+  document.removeEventListener("pointerdown", closeRememberMenuOnOutsideClick);
+  if (focusTrigger) rememberTrigger.focus();
+}
+
+function closeRememberMenuOnOutsideClick(event) {
+  if (!rememberMenu.contains(event.target) && !rememberTrigger.contains(event.target)) closeRememberMenu();
+}
+
+rememberTrigger.addEventListener("click", () => {
+  if (rememberMenu.hidden) openRememberMenu();
+  else closeRememberMenu();
+});
+
+rememberMenu.addEventListener("keydown", (event) => {
+  const index = rememberItems.indexOf(document.activeElement);
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    rememberItems[(index + step + rememberItems.length) % rememberItems.length].focus();
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    closeRememberMenu({ focusTrigger: true });
+  } else if (event.key === "Tab") {
+    closeRememberMenu();
+  }
+});
+
+for (const item of rememberItems) {
+  item.addEventListener("click", () => {
+    closeRememberMenu({ focusTrigger: true });
+    setRememberMinutes(Number(item.dataset.minutes));
+  });
+}
+
+lockBtn.addEventListener("click", () => {
+  lock();
+  masterSecretInput.focus();
+});
+
+// Fait fondre la barre, et verrouille à l'échéance si le popup est resté ouvert.
+window.setInterval(() => {
+  if (!sessionDerivation) return;
+  if (hasSessionKey()) renderRememberProgress();
+  else lock();
+}, 1000);
+
+// --- Onglet actif : service détecté depuis son URL ---
+// La permission activeTab (accordée par le clic sur l'icône de l'extension) suffit à
+// lire l'URL de l'onglet courant ; pas besoin de la permission "tabs".
+
+let activeTabUrl = null;
+
+async function loadActiveTabUrl() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    activeTabUrl = tab?.url ?? null;
+  } catch {
+    activeTabUrl = null;
+  }
 }
 
 // Bornes UI (voir deterministicPassword.js) : le calcul crypto lui-même accepte
@@ -105,33 +347,147 @@ function svgIcon(pathsHtml) {
 }
 
 const deleteIconSvg = () => svgIcon('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>');
+
+const copyIconSvg = () =>
+  svgIcon('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>');
+const checkIconSvg = () => svgIcon('<polyline points="20 6 9 17 4 12"/>');
+
+// Ligne "identifiant · version" d'un service enregistré. L'identifiant est un bouton :
+// un clic le copie (icône copier → coche le temps du retour visuel).
+function createUsernameLine(entry) {
+  const line = document.createElement("span");
+  line.className = "saved-item-username";
+  if (!entry.username) {
+    line.textContent = `v${entry.version}`;
+    return line;
+  }
+
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button";
+  copyBtn.className = "saved-item-username-copy";
+  copyBtn.setAttribute("aria-label", `Copier l'identifiant ${entry.username}`);
+  copyBtn.title = "Copier l'identifiant";
+  const copyIcon = copyIconSvg();
+  copyIcon.classList.add("icon-copy");
+  const checkIcon = checkIconSvg();
+  checkIcon.classList.add("icon-check");
+  const text = document.createElement("span");
+  text.textContent = entry.username;
+  copyBtn.append(copyIcon, checkIcon, text);
+  copyBtn.addEventListener("click", async () => {
+    await copyTextToClipboard(entry.username);
+    copyBtn.classList.add("copied");
+    window.clearTimeout(copyBtn._copyTimeout);
+    copyBtn._copyTimeout = window.setTimeout(() => copyBtn.classList.remove("copied"), 1100);
+  });
+
+  line.append(copyBtn, ` · v${entry.version}`);
+  return line;
+}
 const autofillIconSvg = () => svgIcon('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>');
 
-// Injecté dans la page active : cherche le premier champ mot de passe et y colle la
-// valeur. Passe par le setter natif de HTMLInputElement (pas juste input.value = ...)
-// et déclenche un vrai événement "input" : sur les sites en React/Vue, une simple
-// assignation directe est invisible pour le framework et le formulaire resterait vide
-// à la soumission malgré l'affichage.
-function fillFirstPasswordField(password) {
-  const input = document.querySelector('input[type="password"]');
-  if (!input) return false;
+// Injecté dans la page active (sérialisé par chrome.scripting : doit rester autonome,
+// sans aucune référence extérieure). Remplit le champ mot de passe visible et, si un
+// identifiant est fourni, le champ qui s'y apparente juste avant lui.
+//
+// Passe par le setter natif de HTMLInputElement (pas juste input.value = ...) et
+// déclenche de vrais événements "input"/"change" : sur les sites en React/Vue, une
+// simple assignation directe est invisible pour le framework et le formulaire
+// resterait vide à la soumission malgré l'affichage.
+//
+// Formulaires en deux étapes (Google, Microsoft…) : la première page n'a pas encore de
+// champ mot de passe, on ne remplit alors que l'identifiant — mais seulement sur un
+// champ qui y ressemble clairement, jamais une barre de recherche au hasard.
+function fillLoginFields(username, password) {
+  const isFillable = (el) =>
+    !el.disabled && !el.readOnly && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
+
   const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-  nativeSetter.call(input, password);
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-  input.dispatchEvent(new Event("change", { bubbles: true }));
-  input.focus();
-  return true;
+  const setValue = (input, value) => {
+    nativeSetter.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
+  const passwordInput = password
+    ? Array.from(document.querySelectorAll('input[type="password"]')).find(isFillable) ?? null
+    : null;
+
+  let usernameInput = null;
+  if (username) {
+    const scope = passwordInput?.form ?? document;
+    let candidates = Array.from(
+      scope.querySelectorAll('input:not([type]), input[type="text"], input[type="email"], input[type="tel"]')
+    ).filter(isFillable);
+    if (passwordInput) {
+      candidates = candidates.filter(
+        (el) => el.compareDocumentPosition(passwordInput) & Node.DOCUMENT_POSITION_FOLLOWING
+      );
+    }
+
+    const HINT = /user|login|logon|email|e-mail|mail|ident|account|compte|pseudo|nickname/i;
+    const score = (el) => {
+      const autocomplete = (el.getAttribute("autocomplete") || "").toLowerCase();
+      if (autocomplete.includes("username") || autocomplete.includes("email")) return 3;
+      if (el.type === "email") return 2;
+      const described = [el.name, el.id, el.placeholder, el.getAttribute("aria-label")].join(" ");
+      return HINT.test(described) ? 1 : 0;
+    };
+
+    // Meilleur score ; à égalité, le plus proche du champ mot de passe (le dernier).
+    let best = null;
+    let bestScore = -1;
+    for (const el of candidates) {
+      const s = score(el);
+      if (s >= bestScore) {
+        best = el;
+        bestScore = s;
+      }
+    }
+    // Sans formulaire commun avec le mot de passe, un champ texte anonyme pourrait être
+    // n'importe quoi (recherche, newsletter…) : on exige alors un indice explicite.
+    const sameForm = passwordInput?.form && best?.form === passwordInput.form;
+    if (best && (bestScore > 0 || sameForm)) usernameInput = best;
+  }
+
+  if (usernameInput) setValue(usernameInput, username);
+  if (passwordInput) setValue(passwordInput, password);
+  (passwordInput ?? usernameInput)?.focus();
+  return { username: usernameInput !== null, password: passwordInput !== null };
 }
 
-async function autofillActiveTab(password) {
+async function autofillActiveTab(username, password) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id) return false;
+  if (!tab?.id) return { username: false, password: false };
   const [injection] = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    func: fillFirstPasswordField,
-    args: [password],
+    func: fillLoginFields,
+    args: [username || null, password ?? null],
   });
-  return injection?.result === true;
+  return injection?.result ?? { username: false, password: false };
+}
+
+function autofillResultMessage(entry, filled, hadPassword) {
+  if (filled.username && filled.password) {
+    return [`Identifiant et mot de passe de ${entry.service} insérés dans la page.`, "success"];
+  }
+  if (filled.password) {
+    return [
+      entry.username
+        ? `Mot de passe de ${entry.service} inséré (aucun champ identifiant reconnu).`
+        : `Mot de passe de ${entry.service} inséré dans la page.`,
+      "success",
+    ];
+  }
+  if (filled.username) {
+    return [
+      hadPassword
+        ? "Identifiant inséré. Pas encore de champ mot de passe : reclique sur l'éclair à l'étape suivante."
+        : "Identifiant inséré. Renseigne ton Master Secret pour remplir aussi le mot de passe.",
+      "success",
+    ];
+  }
+  return ["Aucun champ identifiant ni mot de passe trouvé sur cette page.", "error"];
 }
 
 async function renderSavedList() {
@@ -154,115 +510,148 @@ async function renderSavedList() {
   savedEmptyEl.hidden = entries.length !== 0;
   savedNoMatchEl.hidden = !(entries.length !== 0 && filtered.length === 0);
 
-  const hasMasterSecret = Boolean(masterSecretInput.value);
+  const hasKey = hasGeneratorKey();
 
-  for (const entry of filtered) {
-    const li = document.createElement("li");
-    li.className = "saved-item";
+  // Les services du site ouvert dans l'onglet actif passent en tête, sous leur propre
+  // titre : c'est presque toujours celui qu'on vient chercher.
+  const currentSite = activeTabUrl ? filtered.filter((entry) => serviceMatchesUrl(entry.service, activeTabUrl)) : [];
+  const others = filtered.filter((entry) => !currentSite.includes(entry));
 
-    const header = document.createElement("div");
-    header.className = "saved-item-header";
-
-    const info = document.createElement("div");
-    info.className = "saved-item-info";
-    const serviceSpan = document.createElement("span");
-    serviceSpan.className = "saved-item-service";
-    serviceSpan.textContent = entry.service;
-    const usernameSpan = document.createElement("span");
-    usernameSpan.className = "saved-item-username";
-    usernameSpan.textContent = entry.username ? `${entry.username} · v${entry.version}` : `v${entry.version}`;
-    info.append(serviceSpan, usernameSpan);
-
-    const computed = computedPasswords.get(savedEntryKey(entry));
-
-    const autofillBtn = document.createElement("button");
-    autofillBtn.type = "button";
-    autofillBtn.className = "icon-btn saved-item-autofill";
-    autofillBtn.setAttribute("aria-label", `Remplir le champ mot de passe de la page avec ${entry.service}`);
-    autofillBtn.appendChild(autofillIconSvg());
-    autofillBtn.disabled = computed === undefined;
-    autofillBtn.addEventListener("click", async () => {
-      setMessage(savedMessageEl, "Recherche du champ mot de passe sur la page...", "");
-      try {
-        const filled = await autofillActiveTab(computed);
-        setMessage(
-          savedMessageEl,
-          filled ? `Mot de passe de ${entry.service} inséré dans la page.` : "Aucun champ mot de passe trouvé sur cette page.",
-          filled ? "success" : "error"
-        );
-      } catch {
-        setMessage(
-          savedMessageEl,
-          "Impossible d'agir sur cette page (page interne du navigateur, ou extension non autorisée ici).",
-          "error"
-        );
-      }
-    });
-
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "icon-btn saved-item-delete";
-    deleteBtn.setAttribute("aria-label", `Supprimer ${entry.service} de la liste`);
-    deleteBtn.appendChild(deleteIconSvg());
-    deleteBtn.addEventListener("click", async () => {
-      await deleteService({ service: entry.service, username: entry.username }, chromeStorageAdapter);
-      computedPasswords.delete(savedEntryKey(entry));
-      renderSavedList();
-    });
-
-    const actions = document.createElement("div");
-    actions.className = "saved-item-actions";
-    actions.append(autofillBtn, deleteBtn);
-
-    header.append(info, actions);
-
-    const passwordBtn = document.createElement("button");
-    passwordBtn.type = "button";
-    passwordBtn.className = "saved-item-password";
-
-    if (!hasMasterSecret) {
-      passwordBtn.textContent = "Renseigne ton Master Secret ci-dessus";
-      passwordBtn.addEventListener("click", () => masterSecretInput.focus());
-    } else if (computed === undefined) {
-      passwordBtn.textContent = "…";
-      passwordBtn.disabled = true;
-    } else {
-      passwordBtn.textContent = savedPasswordsRevealed ? computed : maskPassword(computed);
-      passwordBtn.setAttribute("aria-label", `Copier le mot de passe de ${entry.service}`);
-      passwordBtn.addEventListener("click", async () => {
-        await copyTextToClipboard(computed);
-        const previousText = passwordBtn.textContent;
-        passwordBtn.textContent = "Copié !";
-        passwordBtn.classList.add("copied");
-        window.setTimeout(() => {
-          passwordBtn.textContent = previousText;
-          passwordBtn.classList.remove("copied");
-        }, 1100);
-      });
-    }
-
-    li.append(header, passwordBtn);
-    savedListEl.appendChild(li);
+  if (currentSite.length > 0) {
+    savedListEl.appendChild(createGroupTitle(`Sur ce site · ${serviceFromUrl(activeTabUrl)}`));
+    for (const entry of currentSite) savedListEl.appendChild(createSavedItem(entry, hasKey, true));
+    if (others.length > 0) savedListEl.appendChild(createGroupTitle("Autres services"));
   }
+  for (const entry of others) savedListEl.appendChild(createSavedItem(entry, hasKey, false));
+}
+
+function createGroupTitle(text) {
+  const li = document.createElement("li");
+  li.className = "saved-group-title";
+  li.setAttribute("role", "presentation");
+  li.textContent = text;
+  return li;
+}
+
+function createSavedItem(entry, hasKey, isCurrentSite) {
+  const li = document.createElement("li");
+  li.className = isCurrentSite ? "saved-item current-site" : "saved-item";
+
+  const header = document.createElement("div");
+  header.className = "saved-item-header";
+
+  const info = document.createElement("div");
+  info.className = "saved-item-info";
+  const serviceSpan = document.createElement("span");
+  serviceSpan.className = "saved-item-service";
+  serviceSpan.textContent = entry.service;
+  info.append(serviceSpan, createUsernameLine(entry));
+
+  const computed = computedPasswords.get(savedEntryKey(entry));
+
+  const autofillBtn = document.createElement("button");
+  autofillBtn.type = "button";
+  autofillBtn.className = "icon-btn saved-item-autofill";
+  autofillBtn.setAttribute(
+    "aria-label",
+    entry.username
+      ? `Remplir l'identifiant et le mot de passe de ${entry.service} dans la page`
+      : `Remplir le champ mot de passe de la page avec ${entry.service}`
+  );
+  autofillBtn.appendChild(autofillIconSvg());
+  // Sans mot de passe calculé, l'éclair reste utile pour l'identifiant seul (première
+  // étape des connexions en deux temps).
+  autofillBtn.disabled = computed === undefined && !entry.username;
+  autofillBtn.addEventListener("click", async () => {
+    setMessage(savedMessageEl, "Recherche des champs de connexion sur la page...", "");
+    try {
+      const filled = await autofillActiveTab(entry.username, computed);
+      const [text, type] = autofillResultMessage(entry, filled, computed !== undefined);
+      setMessage(savedMessageEl, text, type);
+    } catch {
+      setMessage(
+        savedMessageEl,
+        "Impossible d'agir sur cette page (page interne du navigateur, ou extension non autorisée ici).",
+        "error"
+      );
+    }
+  });
+
+  const deleteBtn = document.createElement("button");
+  deleteBtn.type = "button";
+  deleteBtn.className = "icon-btn saved-item-delete";
+  deleteBtn.setAttribute("aria-label", `Supprimer ${entry.service} de la liste`);
+  deleteBtn.appendChild(deleteIconSvg());
+  deleteBtn.addEventListener("click", async () => {
+    await deleteService({ service: entry.service, username: entry.username }, chromeStorageAdapter);
+    computedPasswords.delete(savedEntryKey(entry));
+    renderSavedList();
+  });
+
+  const actions = document.createElement("div");
+  actions.className = "saved-item-actions";
+  actions.append(autofillBtn, deleteBtn);
+
+  header.append(info, actions);
+
+  const passwordBtn = document.createElement("button");
+  passwordBtn.type = "button";
+  passwordBtn.className = "saved-item-password";
+
+  if (!hasKey) {
+    passwordBtn.textContent = "Renseigne ton Master Secret ci-dessus";
+    passwordBtn.addEventListener("click", () => masterSecretInput.focus());
+  } else if (computed === undefined) {
+    passwordBtn.textContent = "…";
+    passwordBtn.disabled = true;
+  } else {
+    passwordBtn.textContent = savedPasswordsRevealed ? computed : maskPassword(computed);
+    passwordBtn.setAttribute("aria-label", `Copier le mot de passe de ${entry.service}`);
+    passwordBtn.addEventListener("click", async () => {
+      await copyTextToClipboard(computed);
+      const previousText = passwordBtn.textContent;
+      passwordBtn.textContent = "Copié !";
+      passwordBtn.classList.add("copied");
+      window.setTimeout(() => {
+        passwordBtn.textContent = previousText;
+        passwordBtn.classList.remove("copied");
+      }, 1100);
+    });
+  }
+
+  li.append(header, passwordBtn);
+  return li;
 }
 
 // Volontairement pas de recalcul en live à chaque frappe du Master Secret (PBKDF2 est
 // lent par design) : déclenché à l'ouverture du popup, puis au blur/Entrée du champ.
 async function recomputeSavedPasswords() {
-  const masterSecret = masterSecretInput.value;
   computedPasswords.clear();
 
   await renderSavedList();
-  if (!masterSecret) return;
+  if (!hasGeneratorKey()) return;
 
   const entries = await listSavedServices(chromeStorageAdapter);
   if (entries.length === 0) return;
 
   setMessage(savedMessageEl, "Calcul des mots de passe…", "");
 
+  let key;
+  try {
+    key = await resolveGeneratorKey();
+  } catch {
+    key = null;
+  }
+  if (!key) {
+    setMessage(savedMessageEl, "", "");
+    renderSavedList();
+    return;
+  }
+
+  // Une seule dérivation PBKDF2 pour toute la liste, puis un HMAC par service.
   for (const entry of entries) {
     try {
-      const password = await generateV1(masterSecret, entry);
+      const password = await generateV1WithKey(key, entry);
       computedPasswords.set(savedEntryKey(entry), password);
     } catch {
       // Cette entrée restera sur "…" ; le reste de la liste continue.
@@ -370,6 +759,7 @@ function activateTab(tabName) {
     document.getElementById(`panel-${btn.dataset.tab}`).hidden = !isActive;
   }
   if (tabName === "saved") recomputeSavedPasswords();
+  if (tabName === "generator") prefillDetectedService();
 }
 
 tabButtons.forEach((btn) => {
@@ -426,11 +816,25 @@ const genOutputInput = document.getElementById("gen-output");
 const genMessageEl = document.getElementById("gen-message");
 const genGenerateBtn = document.getElementById("gen-generate-btn");
 const genSaveBtn = document.getElementById("gen-save-btn");
+const genServiceHintEl = document.getElementById("gen-service-hint");
+
+// Pré-remplit le service avec le domaine de l'onglet actif, sans jamais écraser ce qui
+// a été tapé. Le service fait partie de la recette du mot de passe : l'indice sous le
+// champ rappelle qu'il a été deviné et qu'on peut le corriger.
+function prefillDetectedService() {
+  const detected = activeTabUrl ? serviceFromUrl(activeTabUrl) : null;
+  if (!detected || genServiceInput.value.trim()) return;
+  genServiceInput.value = detected;
+  genServiceHintEl.textContent = "Détecté depuis l'onglet actif — modifiable.";
+  genServiceHintEl.hidden = false;
+}
+
+genServiceInput.addEventListener("input", () => {
+  genServiceHintEl.hidden = true;
+});
 
 genGenerateBtn.addEventListener("click", () =>
   withBusyButton(genGenerateBtn, async () => {
-    const masterSecret = requireMasterSecret(genMessageEl);
-    if (!masterSecret) return;
     if (!genServiceInput.value.trim()) {
       setMessage(genMessageEl, "Renseigne au moins le service.", "error");
       return;
@@ -438,7 +842,9 @@ genGenerateBtn.addEventListener("click", () =>
     const length = readValidLength(genMessageEl);
     if (length === null) return;
     try {
-      genOutputInput.value = await generateV1(masterSecret, {
+      const key = await requireGeneratorKey(genMessageEl);
+      if (!key) return;
+      genOutputInput.value = await generateV1WithKey(key, {
         service: genServiceInput.value,
         username: genUsernameInput.value,
         version: genVersionInput.value || 1,
@@ -483,4 +889,13 @@ document.querySelectorAll(".copy-btn").forEach((btn) => {
   });
 });
 
-renderSavedList();
+// Ouverture du popup : si une clé est encore mémorisée, les mots de passe sont prêts
+// sans rien retaper.
+async function init() {
+  rememberMinutes = await loadRememberMinutes();
+  renderRememberMenu();
+  await Promise.all([loadSession(), loadActiveTabUrl()]);
+  await recomputeSavedPasswords();
+}
+
+init();

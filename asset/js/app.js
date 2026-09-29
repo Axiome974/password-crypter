@@ -188,7 +188,7 @@ function maskPassword(password) {
   return "•".repeat(password.length);
 }
 
-function deleteIconSvg() {
+function svgIcon(pathsHtml) {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("class", "icon");
   svg.setAttribute("viewBox", "0 0 24 24");
@@ -197,8 +197,47 @@ function deleteIconSvg() {
   svg.setAttribute("stroke-width", "2");
   svg.setAttribute("stroke-linecap", "round");
   svg.setAttribute("stroke-linejoin", "round");
-  svg.innerHTML = '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>';
+  svg.innerHTML = pathsHtml;
   return svg;
+}
+
+const deleteIconSvg = () => svgIcon('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>');
+
+const copyIconSvg = () =>
+  svgIcon('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>');
+const checkIconSvg = () => svgIcon('<polyline points="20 6 9 17 4 12"/>');
+
+// Ligne "identifiant · version" d'un service enregistré. L'identifiant est un bouton :
+// un clic le copie (icône copier → coche le temps du retour visuel).
+function createUsernameLine(entry) {
+  const line = document.createElement("span");
+  line.className = "saved-item-username";
+  if (!entry.username) {
+    line.textContent = `v${entry.version}`;
+    return line;
+  }
+
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button";
+  copyBtn.className = "saved-item-username-copy";
+  copyBtn.setAttribute("aria-label", `Copier l'identifiant ${entry.username}`);
+  copyBtn.title = "Copier l'identifiant";
+  const copyIcon = copyIconSvg();
+  copyIcon.classList.add("icon-copy");
+  const checkIcon = checkIconSvg();
+  checkIcon.classList.add("icon-check");
+  const text = document.createElement("span");
+  text.textContent = entry.username;
+  copyBtn.append(copyIcon, checkIcon, text);
+  copyBtn.addEventListener("click", async () => {
+    await copyTextToClipboard(entry.username);
+    copyBtn.classList.add("copied");
+    window.clearTimeout(copyBtn._copyTimeout);
+    copyBtn._copyTimeout = window.setTimeout(() => copyBtn.classList.remove("copied"), 1100);
+  });
+
+  line.append(copyBtn, ` · v${entry.version}`);
+  return line;
 }
 
 // N'utilise que ce qui est déjà dans computedPasswords, ne relance jamais de calcul
@@ -241,10 +280,7 @@ async function renderSavedList() {
     const serviceSpan = document.createElement("span");
     serviceSpan.className = "saved-item-service";
     serviceSpan.textContent = entry.service;
-    const usernameSpan = document.createElement("span");
-    usernameSpan.className = "saved-item-username";
-    usernameSpan.textContent = entry.username ? `${entry.username} · v${entry.version}` : `v${entry.version}`;
-    info.append(serviceSpan, usernameSpan);
+    info.append(serviceSpan, createUsernameLine(entry));
 
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";

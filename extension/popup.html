@@ -24,8 +24,28 @@
           <svg class="icon icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           <svg class="icon icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.6 20.6 0 0 1 5.06-5.94M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 8 11 8a20.6 20.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
         </button>
+        <button type="button" class="remember-trigger" id="remember-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="remember-menu">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+          <span id="remember-trigger-label"></span>
+          <svg class="icon remember-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="remember-menu" id="remember-menu" role="menu" aria-label="Se souvenir de la clé pendant" hidden>
+          <p class="remember-menu-title">Se souvenir pendant</p>
+          <button type="button" role="menuitemradio" data-minutes="0">Non</button>
+          <button type="button" role="menuitemradio" data-minutes="5">5 min</button>
+          <button type="button" role="menuitemradio" data-minutes="15">15 min</button>
+          <button type="button" role="menuitemradio" data-minutes="60">1 h</button>
+        </div>
       </div>
-      <p class="list-hint">Jamais stocké, jamais envoyé — seulement gardé en mémoire tant que ce popup reste ouvert.</p>
+      <div class="remember-progress" id="remember-progress" hidden>
+        <div class="remember-track" id="remember-track" role="progressbar" aria-label="Temps restant avant verrouillage" aria-valuemin="0" aria-valuemax="100">
+          <div class="remember-fill" id="remember-fill"></div>
+        </div>
+        <button type="button" class="icon-btn remember-lock" id="lock-btn" aria-label="Verrouiller maintenant" title="Verrouiller maintenant">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        </button>
+      </div>
+      <p class="list-hint" id="master-hint">Jamais stocké, jamais envoyé — seulement gardé en mémoire tant que ce popup reste ouvert.</p>
     </div>
 
     <div class="tabs" role="tablist" aria-label="Fonctions">
@@ -36,7 +56,7 @@
     <!-- Enregistrés -->
     <section class="panel" id="panel-saved" role="tabpanel" aria-labelledby="tab-btn-saved">
       <div class="label-row">
-        <p class="list-hint">Clique un mot de passe pour le copier, ou l'éclair pour le coller dans la page.</p>
+        <p class="list-hint">Clique un identifiant ou un mot de passe pour le copier, ou l'éclair pour remplir la page.</p>
         <button type="button" class="icon-btn eye-toggle panel-reveal-toggle" id="toggle-saved-passwords" aria-expanded="false" aria-label="Afficher les mots de passe en clair">
           <svg class="icon icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           <svg class="icon icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.6 20.6 0 0 1 5.06-5.94M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 8 11 8a20.6 20.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -62,6 +82,7 @@
       <div class="field">
         <label for="gen-service">Service</label>
         <input type="text" id="gen-service" placeholder="ex : github.com" autocomplete="off" spellcheck="false">
+        <p class="list-hint field-hint" id="gen-service-hint" hidden></p>
       </div>
 
       <div class="field">
